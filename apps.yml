@@ -1,0 +1,28 @@
+# Craft apps whose WebAssembly releases are republished to Maven Central.
+#
+# To add an app, append an entry. The next scheduled run picks it up.
+#
+#   id           short name, used for the editor folder inside the jar
+#   name         display name for the POM
+#   description  one sentence for the POM
+#   upstream     GitHub repository that publishes the releases
+#   artifact-id  Maven artifactId under de.inetsoftware
+#   asset        release asset to repackage; {version} is replaced
+#   since        oldest upstream version to publish. Older releases are ignored,
+#                so adding an app does not backfill its whole history.
+apps:
+  - id: gridcraft
+    name: GridCraft Web
+    description: Browser build (WebAssembly) of the GridCraft spreadsheet editor.
+    upstream: storytold/gridcraft
+    artifact-id: gridcraft-web
+    asset: gridcraft-web-{version}.zip
+    since: 0.11.1
+
+  - id: wordcraft
+    name: WordCraft Web
+    description: Browser build (WebAssembly) of the WordCraft word processor.
+    upstream: storytold/wordcraft
+    artifact-id: wordcraft-web
+    asset: wordcraft-web-{version}.zip
+    since: 0.10.0

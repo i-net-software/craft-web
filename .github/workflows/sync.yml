@@ -1,0 +1,96 @@
+name: Sync releases
+
+on:
+  schedule:
+    - cron: '17 * * * *'   # hourly; GitHub may delay scheduled runs under load
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Release to Maven Central. Off: upload and validate the staging repository, then stop.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One run at a time: Maven Central staging must see versions in order.
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Find new upstream releases
+    # The schedule only does anything once the repository variable PUBLISH is 'true'.
+    if: github.event_name == 'workflow_dispatch' || vars.PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          matrix=$(scripts/plan.sh)
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq '.include | length' <<<"$matrix")" >> "$GITHUB_OUTPUT"
+          jq -r '.include[] | "new: \(.tag)"' <<<"$matrix"
+
+  publish:
+    name: Publish ${{ matrix.tag }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # creates the tag and release that mark a version as published
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Real release: scheduled run with PUBLISH=true, or a manual run with "release" ticked.
+      RELEASE: ${{ (github.event_name == 'schedule' || inputs.release) && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Download and verify upstream release
+        run: scripts/fetch.sh '${{ matrix.upstream }}' '${{ matrix.version }}' '${{ matrix.asset }}' build/input
+
+      - name: Build and publish to Maven Central
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon \
+            -PappId='${{ matrix.id }}' \
+            -PappName='${{ matrix.name }}' \
+            -PappDescription='${{ matrix.description }}' \
+            -PappUpstream='${{ matrix.upstream }}' \
+            -PappArtifactId='${{ matrix.artifact-id }}' \
+            -PappVersion='${{ matrix.version }}' \
+            -PappAsset='${{ matrix.asset }}' \
+            -PinputDir=build/input \
+            publishToSonatype ${{ env.RELEASE == 'true' && 'closeAndReleaseSonatypeStagingRepository' || 'closeSonatypeStagingRepository' }}
+
+      # Last step on purpose: the tag is what plan.sh looks for. If anything above fails,
+      # the next run tries this version again.
+      - name: Mark as published
+        if: env.RELEASE == 'true'
+        run: |
+          gh release create '${{ matrix.tag }}' \
+            --target '${{ github.sha }}' \
+            --title '${{ matrix.name }} ${{ matrix.version }}' \
+            --notes "Republishes [${{ matrix.upstream }} v${{ matrix.version }}](https://github.com/${{ matrix.upstream }}/releases/tag/v${{ matrix.version }}) as \`de.inetsoftware:${{ matrix.artifact-id }}:${{ matrix.version }}\` on Maven Central. The upstream checksum was verified before publishing." \
+            "build/libs/${{ matrix.artifact-id }}-${{ matrix.version }}.jar"

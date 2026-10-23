@@ -1,0 +1,146 @@
+plugins {
+    id 'base'
+    id 'maven-publish'
+    id 'signing'
+    id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
+}
+
+// Inputs, passed by the workflow (see README.md, "Run locally"):
+//   -PappId=gridcraft -PappName='GridCraft Web' -PappDescription='...'
+//   -PappUpstream=storytold/gridcraft -PappArtifactId=gridcraft-web
+//   -PappVersion=0.11.1 -PinputDir=<directory with the verified release zip> -PappAsset=<zip name>
+def required = { String name ->
+    def value = project.findProperty( name )
+    if( value == null || value.toString().isEmpty() ) {
+        throw new GradleException( "Missing property -P${name}. See README.md." )
+    }
+    value.toString()
+}
+
+group = 'de.inetsoftware'
+version = required( 'appVersion' )
+
+def appId = required( 'appId' )
+def upstream = required( 'appUpstream' )
+def artifactName = required( 'appArtifactId' )
+def upstreamZip = file( "${required( 'inputDir' )}/${required( 'appAsset' )}" )
+def licenseFiles = [ 'LICENSE-APACHE', 'LICENSE-MIT', 'NOTICE' ]
+
+// Web assets go where servlet containers serve them from: /craft/<appId>/... on the classpath.
+def jarTask = tasks.register( 'jar', Jar ) {
+    archiveBaseName = artifactName
+    destinationDirectory = layout.buildDirectory.dir( 'libs' )
+
+    from( zipTree( upstreamZip ) ) {
+        // The zip has one top-level folder named <app>-web-<version>. Drop it.
+        eachFile { details ->
+            String[] segments = details.relativePath.segments
+            if( segments.length <= 1 ) {
+                details.exclude()
+                return
+            }
+            String[] rest = Arrays.copyOfRange( segments, 1, segments.length )
+            String[] target
+            if( rest.length == 1 && licenseFiles.contains( rest[0] ) ) {
+                target = [ 'META-INF', 'licenses', appId, rest[0] ] as String[]
+            } else {
+                target = [ 'META-INF', 'resources', 'craft', appId ] as String[]
+                target = target + rest
+            }
+            details.relativePath = new RelativePath( !details.directory, target )
+        }
+        includeEmptyDirs = false
+    }
+
+    manifest {
+        attributes(
+            'Implementation-Title': artifactName,
+            'Implementation-Version': project.version,
+            'License': 'MIT OR Apache-2.0',
+            'URL': "https://github.com/${upstream}/releases/tag/v${project.version}",
+            'Craft-Editor': appId,
+            'Craft-Version': project.version
+        )
+    }
+}
+
+// Maven Central requires -sources and -javadoc jars, even if there is nothing to put in.
+def emptyJar = { String classifier ->
+    tasks.register( "${classifier}Jar", Jar ) {
+        archiveBaseName = artifactName
+        archiveClassifier = classifier
+        destinationDirectory = layout.buildDirectory.dir( 'libs' )
+        from( 'packaging/NO-SOURCES.txt' )
+    }
+}
+def sourcesJar = emptyJar( 'sources' )
+def javadocJar = emptyJar( 'javadoc' )
+
+publishing {
+    publications {
+        craftWeb( MavenPublication ) {
+            artifactId = artifactName
+            artifact jarTask
+            artifact sourcesJar
+            artifact javadocJar
+
+            pom {
+                name = required( 'appName' )
+                description = required( 'appDescription' )
+                url = "https://github.com/${upstream}"
+
+                licenses {
+                    license {
+                        name = 'Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/license/mit'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'i-net software'
+                        organization = 'i-net software'
+                        organizationUrl = 'https://www.inetsoftware.de/'
+                    }
+                }
+                scm {
+                    url = "https://github.com/${upstream}"
+                    connection = "scm:git:git://github.com/${upstream}.git"
+                    developerConnection = "scm:git:ssh://github.com/${upstream}.git"
+                }
+            }
+        }
+    }
+
+    repositories {
+        // Dry run without credentials: ./gradlew publishAllPublicationsToBuildRepository
+        maven {
+            name = 'build'
+            url = layout.buildDirectory.dir( 'repo' )
+        }
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl = uri( 'https://ossrh-staging-api.central.sonatype.com/service/local/' )
+            snapshotRepositoryUrl = uri( 'https://central.sonatype.com/repository/maven-snapshots/' )
+            username = System.getenv( 'SONATYPE_USERNAME' ) ?: ''
+            password = System.getenv( 'SONATYPE_PASSWORD' ) ?: ''
+        }
+    }
+}
+
+// Sign whenever a key is available; Maven Central rejects unsigned artifacts.
+def signingKey = System.getenv( 'SIGNING_KEY' )
+signing {
+    required = signingKey != null
+    if( signingKey != null ) {
+        useInMemoryPgpKeys( signingKey, System.getenv( 'SIGNING_PASSWORD' ) )
+        sign publishing.publications.craftWeb
+    }
+}

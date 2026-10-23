@@ -1,0 +1,3 @@
+This artifact repackages a prebuilt WebAssembly release. It contains no Java
+sources and no API documentation. The sources of the application are in the
+upstream repository named in META-INF/MANIFEST.MF (attribute "URL").
