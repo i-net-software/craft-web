@@ -2,3 +2,6 @@
 build/
 .idea/
 *.iml
+
+# The wrapper jar is needed to build; a global *.jar ignore must not hide it.
+!gradle/wrapper/gradle-wrapper.jar
