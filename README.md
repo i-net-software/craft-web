@@ -75,10 +75,10 @@ Scheduled workflows run for free in public repositories. GitHub disables them af
 Run locally
 ----
 
-Needs JDK 17 or newer, `gh`, `jq` and `yq`. This builds one jar into `build/repo` without credentials and without publishing:
+Needs JDK 17 or newer, Gradle 8.14, `gh`, `jq` and `yq`. The project has no Gradle wrapper; the workflows install Gradle 8.14.3. This builds one jar into `build/repo` without credentials and without publishing:
 
     scripts/fetch.sh storytold/gridcraft 0.11.1 gridcraft-web-0.11.1.zip build/input
-    ./gradlew \
+    gradle \
       -PappId=gridcraft -PappName='GridCraft Web' -PappDescription='Browser build of GridCraft.' \
       -PappUpstream=storytold/gridcraft -PappArtifactId=gridcraft-web \
       -PappVersion=0.11.1 -PappAsset=gridcraft-web-0.11.1.zip -PinputDir=build/input \

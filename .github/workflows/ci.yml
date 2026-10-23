@@ -29,6 +29,8 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
 
       - name: Build the first app into a local repository
         run: |
@@ -36,7 +38,7 @@ jobs:
           version=$(jq -r .since <<<"$app")
           asset=$(jq -r .asset <<<"$app" | sed "s/{version}/${version}/")
           scripts/fetch.sh "$(jq -r .upstream <<<"$app")" "$version" "$asset" build/input
-          ./gradlew --no-daemon \
+          gradle --no-daemon \
             -PappId="$(jq -r .id <<<"$app")" -PappName="$(jq -r .name <<<"$app")" \
             -PappDescription="$(jq -r .description <<<"$app")" -PappUpstream="$(jq -r .upstream <<<"$app")" \
             -PappArtifactId="$(jq -r '."artifact-id"' <<<"$app")" \
