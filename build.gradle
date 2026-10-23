@@ -116,7 +116,7 @@ publishing {
     }
 
     repositories {
-        // Dry run without credentials: ./gradlew publishAllPublicationsToBuildRepository
+        // Dry run without credentials: gradle publishAllPublicationsToBuildRepository
         maven {
             name = 'build'
             url = layout.buildDirectory.dir( 'repo' )
