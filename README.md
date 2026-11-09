@@ -37,15 +37,15 @@ How it works
 ----
 
     upstream release ──► plan ──► download + SHA-256 check ──► jar ──► Maven Central ──► tag here
-         (hourly)
+         (weekly)
 
-1. [`sync.yml`](.github/workflows/sync.yml) runs every hour and on demand.
-2. [`scripts/plan.sh`](scripts/plan.sh) reads [`apps.yml`](apps.yml) and lists the final releases of each upstream repository. A release is new if this repository has no tag `<artifact-id>-<version>`.
+1. [`sync.yml`](.github/workflows/sync.yml) runs on Mondays at 06:17 UTC and on demand. Each artifact has a seven-day cooldown. Manual runs can enable `override_cooldown` to publish earlier (also enable `release` to publish to Central). Duplicate and reservation checks always remain active.
+2. [`scripts/plan.sh`](scripts/plan.sh) reads [`apps.yml`](apps.yml) and lists the final releases of each upstream repository. It selects only the newest stable release with a web archive. Git tags, reserved draft releases and Maven Central metadata prevent publishing the same version twice; API and metadata errors stop the run.
 3. [`scripts/fetch.sh`](scripts/fetch.sh) downloads the web archive and compares it with the `SHA256SUMS.txt` of the same release. A missing entry or a different checksum stops the run.
 4. [`build.gradle`](build.gradle) repackages the archive, signs it and uploads it with the [Sonatype Central Portal](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/) staging API.
-5. Only after a successful upload the workflow creates the tag and a GitHub release with the jar attached. If a step fails, the next run starts again with that version.
+5. Before uploading, the workflow reserves the version with a draft release. Failed or ambiguous uploads keep this reservation; check Central and the workflow result before removing it to retry. Only after a successful upload the workflow creates the tag and a GitHub release with the jar attached. If the marker step fails after publishing, Maven Central metadata still prevents a duplicate publication.
 
-Releases are processed one at a time and oldest first.
+At most one version per app is selected per run. Older releases are not backfilled. Maven Central metadata and GitHub release/reservation timestamps enforce the cooldown.
 
 ### What is verified
 
@@ -78,7 +78,7 @@ Run locally
 Needs JDK 17 or newer, Gradle 8.14, `gh`, `jq` and `yq`. The project has no Gradle wrapper; the workflows install Gradle 8.14.3. This builds one jar into `build/repo` without credentials and without publishing:
 
     scripts/fetch.sh storytold/gridcraft 0.11.1 gridcraft-web-0.11.1.zip build/input
-    gradle \
+    gradle -PskipJPP \
       -PappId=gridcraft -PappName='GridCraft Web' -PappDescription='Browser build of GridCraft.' \
       -PappUpstream=storytold/gridcraft -PappArtifactId=gridcraft-web \
       -PappVersion=0.11.1 -PappAsset=gridcraft-web-0.11.1.zip -PinputDir=build/input \

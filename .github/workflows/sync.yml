@@ -2,11 +2,15 @@ name: Sync releases
 
 on:
   schedule:
-    - cron: '17 * * * *'   # hourly; GitHub may delay scheduled runs under load
+    - cron: '17 6 * * 1'   # Mondays at 06:17 UTC; GitHub may delay scheduled runs under load
   workflow_dispatch:
     inputs:
       release:
         description: 'Release to Maven Central. Off: upload and validate the staging repository, then stop.'
+        type: boolean
+        default: false
+      override_cooldown:
+        description: 'Ignore the seven-day cooldown. Already published or reserved versions remain blocked.'
         type: boolean
         default: false
 
@@ -32,6 +36,7 @@ jobs:
       - id: plan
         env:
           GH_TOKEN: ${{ github.token }}
+          OVERRIDE_COOLDOWN: ${{ github.event_name == 'workflow_dispatch' && inputs.override_cooldown && 'true' || 'false' }}
         run: |
           matrix=$(scripts/plan.sh)
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
@@ -68,6 +73,16 @@ jobs:
       - name: Download and verify upstream release
         run: scripts/fetch.sh '${{ matrix.upstream }}' '${{ matrix.version }}' '${{ matrix.asset }}' build/input
 
+      # Keep the reservation if publishing fails or times out: an ambiguous upload must
+      # be investigated before retrying this version, even before Central indexes it.
+      - name: Reserve version before publishing
+        if: env.RELEASE == 'true'
+        run: |
+          gh release create '${{ matrix.tag }}' --draft \
+            --target '${{ github.sha }}' \
+            --title '${{ matrix.name }} ${{ matrix.version }}' \
+            --notes 'Publication reserved. If this run fails, check Central before removing this draft to retry.'
+
       - name: Build and publish to Maven Central
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
@@ -75,7 +90,7 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
-          gradle --no-daemon \
+          gradle --no-daemon -PskipJPP \
             -PappId='${{ matrix.id }}' \
             -PappName='${{ matrix.name }}' \
             -PappDescription='${{ matrix.description }}' \
@@ -86,13 +101,12 @@ jobs:
             -PinputDir=build/input \
             publishToSonatype ${{ env.RELEASE == 'true' && 'closeAndReleaseSonatypeStagingRepository' || 'closeSonatypeStagingRepository' }}
 
-      # Last step on purpose: the tag is what plan.sh looks for. If anything above fails,
-      # the next run tries this version again.
+      # Last step on purpose: plan.sh checks both this tag and Maven Central,
+      # so a failed marker step cannot cause the same version to be republished.
       - name: Mark as published
         if: env.RELEASE == 'true'
         run: |
-          gh release create '${{ matrix.tag }}' \
-            --target '${{ github.sha }}' \
+          gh release upload '${{ matrix.tag }}' 'build/libs/${{ matrix.artifact-id }}-${{ matrix.version }}.jar'
+          gh release edit '${{ matrix.tag }}' --draft=false \
             --title '${{ matrix.name }} ${{ matrix.version }}' \
-            --notes "Republishes [${{ matrix.upstream }} v${{ matrix.version }}](https://github.com/${{ matrix.upstream }}/releases/tag/v${{ matrix.version }}) as \`de.inetsoftware:${{ matrix.artifact-id }}:${{ matrix.version }}\` on Maven Central. The upstream checksum was verified before publishing." \
-            "build/libs/${{ matrix.artifact-id }}-${{ matrix.version }}.jar"
+            --notes "Republishes [${{ matrix.upstream }} v${{ matrix.version }}](https://github.com/${{ matrix.upstream }}/releases/tag/v${{ matrix.version }}) as \`de.inetsoftware:${{ matrix.artifact-id }}:${{ matrix.version }}\` on Maven Central. The upstream checksum was verified before publishing."

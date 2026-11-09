@@ -20,6 +20,9 @@ jobs:
       - name: ShellCheck
         run: shellcheck scripts/*.sh
 
+      - name: Test publication limits and duplicate protection
+        run: python3 tests/test-plan.py
+
       - name: Plan (reads upstream releases, changes nothing)
         run: scripts/plan.sh | jq .
 
@@ -38,7 +41,7 @@ jobs:
           version=$(jq -r .since <<<"$app")
           asset=$(jq -r .asset <<<"$app" | sed "s/{version}/${version}/")
           scripts/fetch.sh "$(jq -r .upstream <<<"$app")" "$version" "$asset" build/input
-          gradle --no-daemon \
+          gradle --no-daemon -PskipJPP \
             -PappId="$(jq -r .id <<<"$app")" -PappName="$(jq -r .name <<<"$app")" \
             -PappDescription="$(jq -r .description <<<"$app")" -PappUpstream="$(jq -r .upstream <<<"$app")" \
             -PappArtifactId="$(jq -r '."artifact-id"' <<<"$app")" \
