@@ -26,3 +26,11 @@ apps:
     artifact-id: wordcraft-web
     asset: wordcraft-web-{version}.zip
     since: 0.10.0
+
+  - id: deckcraft
+    name: DeckCraft Web
+    description: Browser build (WebAssembly) of the DeckCraft presentation editor.
+    upstream: storytold/deckcraft
+    artifact-id: deckcraft-web
+    asset: deckcraft-web-{version}.zip
+    since: 0.18.1

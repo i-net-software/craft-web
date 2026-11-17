@@ -4,6 +4,7 @@ craft-web
 [![Sync](https://github.com/i-net-software/craft-web/actions/workflows/sync.yml/badge.svg)](https://github.com/i-net-software/craft-web/actions/workflows/sync.yml)
 [![GridCraft Web](https://img.shields.io/maven-central/v/de.inetsoftware/gridcraft-web.svg?label=gridcraft-web)](https://mvnrepository.com/artifact/de.inetsoftware/gridcraft-web)
 [![WordCraft Web](https://img.shields.io/maven-central/v/de.inetsoftware/wordcraft-web.svg?label=wordcraft-web)](https://mvnrepository.com/artifact/de.inetsoftware/wordcraft-web)
+[![DeckCraft Web](https://img.shields.io/maven-central/v/de.inetsoftware/deckcraft-web.svg?label=deckcraft-web)](https://mvnrepository.com/artifact/de.inetsoftware/deckcraft-web)
 [![License](https://img.shields.io/github/license/i-net-software/craft-web.svg)](LICENSE)
 
 Maven Central artifacts for the WebAssembly builds of the [Craft apps](https://github.com/storytold). Java applications can embed the editors and serve them from the classpath.
@@ -17,6 +18,7 @@ Artifacts
 | --- | --- | --- |
 | [`de.inetsoftware:gridcraft-web`](https://mvnrepository.com/artifact/de.inetsoftware/gridcraft-web) | [storytold/gridcraft](https://github.com/storytold/gridcraft) | spreadsheet editor |
 | [`de.inetsoftware:wordcraft-web`](https://mvnrepository.com/artifact/de.inetsoftware/wordcraft-web) | [storytold/wordcraft](https://github.com/storytold/wordcraft) | word processor |
+| [`de.inetsoftware:deckcraft-web`](https://mvnrepository.com/artifact/de.inetsoftware/deckcraft-web) | [storytold/deckcraft](https://github.com/storytold/deckcraft) | presentation editor |
 
 The version is the upstream version: `gridcraft-web-0.11.1.jar` contains `gridcraft-web-0.11.1.zip` from the upstream release `v0.11.1`.
 
